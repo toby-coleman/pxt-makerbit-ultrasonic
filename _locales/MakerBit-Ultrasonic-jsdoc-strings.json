@@ -1,10 +1,10 @@
 {
-  "makerbit": "MakerBit",
-  "makerbit.connectUltrasonic": "Configures the ultrasonic sensor and measures continuously in the background.",
-  "makerbit.connectUltrasonic|param|echo": "pin connected to echo, eg: DigitalPin.P8",
-  "makerbit.connectUltrasonic|param|trig": "pin connected to trig, eg: DigitalPin.P5",
-  "makerbit.getUltrasonicDistance": "Get the distance to an object and returns the result in a range\nfrom 1 to 300 centimeters or up to 118 inch.\nThe maximum value is returned to indicate when no object was detected.\n-1 is returned when the device is not connected.",
-  "makerbit.getUltrasonicDistance|param|unit": "unit of distance, eg: DistanceUnit.CM",
-  "makerbit.isUltrasonicDistanceLessThan": "Returns `true` if an object is within distance. `false` otherwise.\n* @param distance distance to object, eg: 10",
-  "makerbit.isUltrasonicDistanceLessThan|param|unit": "unit of distance, eg: DistanceUnit.CM"
+  "makerbit.connectUltrasonicDistanceSensor": "Start one background sampler for this HC-SR04. Call once in on start.",
+  "makerbit.ultrasonicDistanceAvailable": "True when three recent valid echoes support a distance.",
+  "makerbit.getUltrasonicDistance": "Return whole cm/inches. No setup: -1. No usable reading: 300 cm / 117 inches.",
+  "makerbit.isUltrasonicDistanceLessThan": "Unknown distances never satisfy this test.",
+  "makerbit.onUltrasonicObjectDetected": "Fires on arrival; requires a confirmed distance over the threshold plus 5 cm to re-arm.",
+  "makerbit.onUltrasonicApproach": "Fires at or below enter; re-arms only above reset. Reset must exceed enter.",
+  "makerbit.setUltrasonicWindow": "Choose how many actual ping attempts to keep. Both settings require three fresh echoes.",
+  "makerbit.ultrasonicCount": "Count actual triggers, accepted echoes or trigger intervals over 155 ms, since startup."
 }

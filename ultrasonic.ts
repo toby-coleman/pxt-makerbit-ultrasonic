@@ -1,227 +1,203 @@
 const enum DistanceUnit {
-  //% block="cm"
-  CM = 58, // Duration of echo round-trip in Microseconds (uS) for two centimeters, 343 m/s at sea level and 20°C
-  //% block="inch"
-  INCH = 148, // Duration of echo round-trip in Microseconds (uS) for two inches, 343 m/s at sea level and 20°C
+    //% block="cm"
+    CM = 58,
+    //% block="inch"
+    INCH = 148
+}
+
+enum UltrasonicWindow {
+    //% block="3 pings"
+    Three = 3,
+    //% block="5 pings"
+    Five = 5
+}
+
+enum UltrasonicCounter {
+    //% block="pings sent"
+    Pings,
+    //% block="valid echoes"
+    Echoes,
+    //% block="late background cycles"
+    Late
 }
 
 //% color=#0fbc11 icon="\u272a" block="MakerBit"
 //% category="MakerBit"
 namespace makerbit {
-  const MICROBIT_MAKERBIT_ULTRASONIC_OBJECT_DETECTED_ID = 798;
-  const MAX_ULTRASONIC_TRAVEL_TIME = 300 * DistanceUnit.CM;
-  const ULTRASONIC_MEASUREMENTS = 3;
+    const EVENT_SOURCE = 798;
+    const PERIOD_MS = 145;
+    const LATE_ALLOWANCE_MS = 10;
+    const FRESH_MS = 750;
+    const MIN_US = 2 * DistanceUnit.CM;
+    const MAX_US = 300 * DistanceUnit.CM;
+    const TIMEOUT_US = 20000;
 
-  interface UltrasonicRoundTrip {
-    ts: number;
-    rtt: number;
-  }
+    interface Attempt { at: number; us: number; }
+    interface Observer { enter: number; reset: number; armed: boolean; id: number; }
 
-  interface UltrasonicDevice {
-    trig: DigitalPin | undefined;
-    roundTrips: UltrasonicRoundTrip[];
-    medianRoundTrip: number;
-    travelTimeObservers: number[];
-  }
+    let connected = false;
+    let windowSize = 5;
+    const attempts: Attempt[] = [];
+    const observers: Observer[] = [];
+    let pings = 0;
+    let echoes = 0;
+    let late = 0;
 
-  let ultrasonicState: UltrasonicDevice;
+    // Cache until a new attempt, a window change, or the oldest contributing echo expires.
+    let dirty = true;
+    let cachedUs = 0;
+    let oldestEcho = 0;
 
-  /**
-   * Configures the ultrasonic distance sensor and measures continuously in the background.
-   * @param trig pin connected to trig, eg: DigitalPin.P5
-   * @param echo pin connected to echo, eg: DigitalPin.P8
-   */
-  //% subcategory="Ultrasonic"
-  //% blockId="makerbit_ultrasonic_connect"
-  //% block="connect ultrasonic distance sensor | with Trig at %trig | and Echo at %echo"
-  //% trig.fieldEditor="gridpicker"
-  //% trig.fieldOptions.columns=4
-  //% trig.fieldOptions.tooltips="false"
-  //% echo.fieldEditor="gridpicker"
-  //% echo.fieldOptions.columns=4
-  //% echo.fieldOptions.tooltips="false"
-  //% weight=80
-  export function connectUltrasonicDistanceSensor(
-    trig: DigitalPin,
-    echo: DigitalPin
-  ): void {
-    if (ultrasonicState && ultrasonicState.trig) {
-      return;
+    function age(now: number, then: number): number {
+        return (now - then) >>> 0;
     }
 
-    if (!ultrasonicState) {
-      ultrasonicState = {
-        trig: trig,
-        roundTrips: [{ ts: 0, rtt: MAX_ULTRASONIC_TRAVEL_TIME }],
-        medianRoundTrip: MAX_ULTRASONIC_TRAVEL_TIME,
-        travelTimeObservers: [],
-      };
-    } else {
-      ultrasonicState.trig = trig;
-    }
-
-    pins.onPulsed(echo, PulseValue.High, () => {
-      if (
-        pins.pulseDuration() < MAX_ULTRASONIC_TRAVEL_TIME &&
-        ultrasonicState.roundTrips.length <= ULTRASONIC_MEASUREMENTS
-      ) {
-        ultrasonicState.roundTrips.push({
-          ts: input.runningTime(),
-          rtt: pins.pulseDuration(),
-        });
-      }
-    });
-
-    control.inBackground(measureInBackground);
-  }
-
-  /**
-   * Do something when an object is detected the first time within a specified range.
-   * @param distance distance to object, eg: 20
-   * @param unit unit of distance, eg: DistanceUnit.CM
-   * @param handler body code to run when the event is raised
-   */
-  //% subcategory="Ultrasonic"
-  //% blockId=makerbit_ultrasonic_on_object_detected
-  //% block="on object detected once within | %distance | %unit"
-  //% weight=69
-  export function onUltrasonicObjectDetected(
-    distance: number,
-    unit: DistanceUnit,
-    handler: () => void
-  ) {
-    if (distance <= 0) {
-      return;
-    }
-
-    if (!ultrasonicState) {
-      ultrasonicState = {
-        trig: undefined,
-        roundTrips: [{ ts: 0, rtt: MAX_ULTRASONIC_TRAVEL_TIME }],
-        medianRoundTrip: MAX_ULTRASONIC_TRAVEL_TIME,
-        travelTimeObservers: [],
-      };
-    }
-
-    const travelTimeThreshold = Math.imul(distance, unit);
-
-    ultrasonicState.travelTimeObservers.push(travelTimeThreshold);
-
-    control.onEvent(
-      MICROBIT_MAKERBIT_ULTRASONIC_OBJECT_DETECTED_ID,
-      travelTimeThreshold,
-      () => {
-        handler();
-      }
-    );
-  }
-
-  /**
-   * Returns the distance to an object in a range from 1 to 300 centimeters or up to 118 inch.
-   * The maximum value is returned to indicate when no object was detected.
-   * -1 is returned when the device is not connected.
-   * @param unit unit of distance, eg: DistanceUnit.CM
-   */
-  //% subcategory="Ultrasonic"
-  //% blockId="makerbit_ultrasonic_distance"
-  //% block="ultrasonic distance in %unit"
-  //% weight=60
-  export function getUltrasonicDistance(unit: DistanceUnit): number {
-    if (!ultrasonicState) {
-      return -1;
-    }
-    basic.pause(0); // yield to allow background processing when called in a tight loop
-    return Math.idiv(ultrasonicState.medianRoundTrip, unit);
-  }
-
-  /**
-   * Returns `true` if an object is within the specified distance. `false` otherwise.
-   *
-   * @param distance distance to object, eg: 20
-   * @param unit unit of distance, eg: DistanceUnit.CM
-   */
-  //% subcategory="Ultrasonic"
-  //% blockId="makerbit_ultrasonic_less_than"
-  //% block="ultrasonic distance is less than | %distance | %unit"
-  //% weight=50
-  export function isUltrasonicDistanceLessThan(
-    distance: number,
-    unit: DistanceUnit
-  ): boolean {
-    if (!ultrasonicState) {
-      return false;
-    }
-    basic.pause(0); // yield to allow background processing when called in a tight loop
-    return Math.idiv(ultrasonicState.medianRoundTrip, unit) < distance;
-  }
-
-  function triggerPulse() {
-    // Reset trigger pin
-    pins.setPull(ultrasonicState.trig, PinPullMode.PullNone);
-    pins.digitalWritePin(ultrasonicState.trig, 0);
-    control.waitMicros(2);
-
-    // Trigger pulse
-    pins.digitalWritePin(ultrasonicState.trig, 1);
-    control.waitMicros(10);
-    pins.digitalWritePin(ultrasonicState.trig, 0);
-  }
-
-  function getMedianRRT(roundTrips: UltrasonicRoundTrip[]) {
-    const roundTripTimes = roundTrips.map((urt) => urt.rtt);
-    return median(roundTripTimes);
-  }
-
-  // Returns median value of non-empty input
-  function median(values: number[]) {
-    values.sort((a, b) => {
-      return a - b;
-    });
-    return values[(values.length - 1) >> 1];
-  }
-
-  function measureInBackground() {
-    const trips = ultrasonicState.roundTrips;
-    const TIME_BETWEEN_PULSE_MS = 145;
-
-    while (true) {
-      const now = input.runningTime();
-
-      if (trips[trips.length - 1].ts < now - TIME_BETWEEN_PULSE_MS - 10) {
-        ultrasonicState.roundTrips.push({
-          ts: now,
-          rtt: MAX_ULTRASONIC_TRAVEL_TIME,
-        });
-      }
-
-      while (trips.length > ULTRASONIC_MEASUREMENTS) {
-        trips.shift();
-      }
-
-      ultrasonicState.medianRoundTrip = getMedianRRT(
-        ultrasonicState.roundTrips
-      );
-
-      for (let i = 0; i < ultrasonicState.travelTimeObservers.length; i++) {
-        const threshold = ultrasonicState.travelTimeObservers[i];
-        if (threshold > 0 && ultrasonicState.medianRoundTrip <= threshold) {
-          control.raiseEvent(
-            MICROBIT_MAKERBIT_ULTRASONIC_OBJECT_DETECTED_ID,
-            threshold
-          );
-          // use negative sign to indicate that we notified the event
-          ultrasonicState.travelTimeObservers[i] = -threshold;
-        } else if (
-          threshold < 0 &&
-          ultrasonicState.medianRoundTrip > -threshold
-        ) {
-          // object is outside the detection threshold -> re-activate observer
-          ultrasonicState.travelTimeObservers[i] = -threshold;
+    // Zero is internal "unknown". Only real, fresh echo widths enter the median.
+    function filteredUs(now: number): number {
+        if (!dirty && (cachedUs == 0 || age(now, oldestEcho) <= FRESH_MS)) return cachedUs;
+        const valid: number[] = [];
+        for (let i = 0; i < attempts.length; ++i) {
+            const a = attempts[i];
+            if (a.us > 0 && age(now, a.at) <= FRESH_MS) {
+                if (valid.length == 0) oldestEcho = a.at;
+                valid.push(a.us);
+            }
         }
-      }
-
-      triggerPulse();
-      basic.pause(TIME_BETWEEN_PULSE_MS);
+        cachedUs = 0;
+        if (valid.length >= 3) {
+            valid.sort((a, b) => a - b);
+            const mid = valid.length >> 1;
+            cachedUs = valid.length % 2 == 1 ? valid[mid] : (valid[mid - 1] + valid[mid]) / 2;
+        }
+        dirty = false;
+        return cachedUs;
     }
-  }
+
+    function trim() {
+        while (attempts.length > windowSize) attempts.shift();
+        dirty = true;
+    }
+
+    function notifyObservers(us: number) {
+        if (us == 0) return; // Missing evidence cannot activate or re-arm an event.
+        for (let i = 0; i < observers.length; ++i) {
+            const o = observers[i];
+            if (o.armed && us <= o.enter) {
+                o.armed = false;
+                control.raiseEvent(EVENT_SOURCE, o.id);
+            } else if (!o.armed && us > o.reset) {
+                o.armed = true;
+            }
+        }
+    }
+
+    function measure(trig: DigitalPin, echo: DigitalPin) {
+        pins.setPull(trig, PinPullMode.PullNone);
+        pins.setPull(echo, PinPullMode.PullNone);
+        let previous = input.runningTime();
+        let first = true;
+        while (true) {
+            const start = input.runningTime();
+            if (!first && age(start, previous) > PERIOD_MS + LATE_ALLOWANCE_MS) late++;
+            first = false;
+            previous = start;
+            pins.digitalWritePin(trig, 0);
+            control.waitMicros(2);
+            pins.digitalWritePin(trig, 1);
+            control.waitMicros(10);
+            pins.digitalWritePin(trig, 0);
+            pings++;
+            const pulse = pins.pulseIn(echo, PulseValue.High, TIMEOUT_US);
+            // 300 cm is reserved for the legacy API; timeouts/invalid widths occupy
+            // an attempt slot but never vote as a distance. Timestamp the actual ping.
+            const us = pulse >= MIN_US && pulse < MAX_US ? pulse : 0;
+            if (us > 0) echoes++;
+            attempts.push({ at: start, us: us });
+            trim();
+            notifyObservers(filteredUs(input.runningTime()));
+            // Schedule from this actual trigger, never from a missed deadline.
+            basic.pause(Math.max(1, PERIOD_MS - age(input.runningTime(), start)));
+        }
+    }
+
+    /** Start one background sampler for this HC-SR04. Call once in on start. */
+    //% subcategory="Ultrasonic" weight=80
+    //% blockId=makerbit_ultrasonic_connect
+    //% block="connect ultrasonic distance sensor | with Trig at %trig | and Echo at %echo"
+    //% trig.fieldEditor="gridpicker" trig.fieldOptions.columns=4
+    //% echo.fieldEditor="gridpicker" echo.fieldOptions.columns=4
+    export function connectUltrasonicDistanceSensor(trig: DigitalPin, echo: DigitalPin): void {
+        if (connected || trig == echo) return;
+        connected = true;
+        control.inBackground(() => measure(trig, echo));
+    }
+
+    /** True when three recent valid echoes support a distance. */
+    //% subcategory="Ultrasonic" weight=70
+    //% blockId=makerbit_ultrasonic_available block="ultrasonic distance reading available?"
+    export function ultrasonicDistanceAvailable(): boolean {
+        basic.pause(0);
+        return filteredUs(input.runningTime()) > 0;
+    }
+
+    /** Return whole cm/inches. No setup: -1. No usable reading: 300 cm / 117 inches. */
+    //% subcategory="Ultrasonic" weight=60
+    //% blockId=makerbit_ultrasonic_distance block="ultrasonic distance in %unit"
+    export function getUltrasonicDistance(unit: DistanceUnit): number {
+        if (!connected) return -1;
+        basic.pause(0);
+        const us = filteredUs(input.runningTime());
+        return Math.idiv(us > 0 ? us : MAX_US, unit);
+    }
+
+    /** Unknown distances never satisfy this test. */
+    //% subcategory="Ultrasonic" weight=50
+    //% blockId=makerbit_ultrasonic_less_than block="ultrasonic distance is less than | %distance | %unit"
+    export function isUltrasonicDistanceLessThan(distance: number, unit: DistanceUnit): boolean {
+        basic.pause(0);
+        const us = filteredUs(input.runningTime());
+        return us > 0 && us < distance * unit;
+    }
+
+    function observe(enter: number, reset: number, handler: () => void) {
+        if (enter <= 0 || reset <= enter) return;
+        const id = observers.length + 1;
+        observers.push({ enter: enter, reset: reset, armed: true, id: id });
+        control.onEvent(EVENT_SOURCE, id, handler);
+    }
+
+    /** Fires on arrival; requires a confirmed distance over the threshold plus 5 cm to re-arm. */
+    //% subcategory="Ultrasonic" weight=69
+    //% blockId=makerbit_ultrasonic_on_object_detected
+    //% block="on object detected once within | %distance | %unit"
+    export function onUltrasonicObjectDetected(distance: number, unit: DistanceUnit, handler: () => void): void {
+        observe(distance * unit, distance * unit + 5 * DistanceUnit.CM, handler);
+    }
+
+    /** Fires at or below enter; re-arms only above reset. Reset must exceed enter. */
+    //% subcategory="Ultrasonic advanced" weight=65
+    //% blockId=makerbit_ultrasonic_enter_reset
+    //% block="on object within %enter cm reset beyond %reset cm"
+    //% enter.defl=20 reset.defl=25
+    export function onUltrasonicApproach(enter: number, reset: number, handler: () => void): void {
+        observe(enter * DistanceUnit.CM, reset * DistanceUnit.CM, handler);
+    }
+
+    /** Choose how many actual ping attempts to keep. Both settings require three fresh echoes. */
+    //% subcategory="Ultrasonic advanced" weight=55
+    //% blockId=makerbit_ultrasonic_window block="use last %size for ultrasonic distance"
+    //% size.defl=UltrasonicWindow.Five
+    export function setUltrasonicWindow(size: UltrasonicWindow): void {
+        windowSize = size == UltrasonicWindow.Three ? 3 : 5;
+        trim();
+    }
+
+    /** Count actual triggers, accepted echoes or trigger intervals over 155 ms, since startup. */
+    //% subcategory="Ultrasonic advanced" weight=45
+    //% blockId=makerbit_ultrasonic_counter block="ultrasonic count of %counter"
+    export function ultrasonicCount(counter: UltrasonicCounter): number {
+        if (counter == UltrasonicCounter.Pings) return pings;
+        if (counter == UltrasonicCounter.Echoes) return echoes;
+        return late;
+    }
 }

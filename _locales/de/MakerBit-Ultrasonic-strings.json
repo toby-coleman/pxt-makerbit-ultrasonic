@@ -4,8 +4,18 @@
   "makerbit.connectUltrasonicDistanceSensor|block": "verbinde Ultraschalldistanzsensor | mit Trig an %trig | und Echo an %echo",
   "makerbit.getUltrasonicDistance|block": "Ultraschall Distanz in %unit",
   "makerbit.isUltrasonicDistanceLessThan|block": "Ultraschall Distanz ist weniger als |%distance|%unit",
-  "makerbit.onUltrasonicObjectDetected|block": "wenn Objekt näher als | %distance | %unit",
+  "makerbit.onUltrasonicObjectDetected|block": "wenn Objekt einmal innerhalb von | %distance | %unit erkannt",
   "makerbit|block": "MakerBit",
   "{id:category}Makerbit": "Makerbit",
-  "{id:subcategory}Ultrasonic": "Ultraschall"
+  "{id:subcategory}Ultrasonic": "Ultraschall",
+  "makerbit.ultrasonicDistanceAvailable|block": "Ultraschall-Distanzmessung verfügbar?",
+  "makerbit.onUltrasonicApproach|block": "wenn Objekt innerhalb von %enter cm, erneut bereit jenseits von %reset cm",
+  "makerbit.setUltrasonicWindow|block": "verwende die letzten %size für die Ultraschalldistanz",
+  "makerbit.ultrasonicCount|block": "Ultraschall-Zähler für %counter",
+  "UltrasonicWindow.Three|block": "3 Messimpulse",
+  "UltrasonicWindow.Five|block": "5 Messimpulse",
+  "UltrasonicCounter.Pings|block": "gesendete Impulse",
+  "UltrasonicCounter.Echoes|block": "gültige Echos",
+  "UltrasonicCounter.Late|block": "verspätete Messzyklen",
+  "{id:subcategory}Ultrasonic advanced": "Ultraschall erweitert"
 }
